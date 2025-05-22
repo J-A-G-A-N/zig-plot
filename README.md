@@ -1,8 +1,8 @@
 # zig-plot-lib
 
 A simple plotting library in Zig that renders 2D plots and saves them as `.ppm` (P6) image files.
-
-This library allows you to:
+This library is underdevelopment.
+This library currently allows you to:
 - Draw points on a Cartesian coordinate system.
 - Save the plotted image in raw binary PPM format.
 - Time execution of drawing and saving steps.

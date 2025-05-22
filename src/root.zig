@@ -37,8 +37,11 @@ pub const Plot = struct {
             const x_range = self.x_max - self.x_min;
             const y_range = self.y_max - self.y_min;
 
-            const norm_x = (x - @as(f64, @floatFromInt(self.x_min))) / @as(f64, @floatFromInt(x_range));
-            const norm_y = (y - @as(f64, @floatFromInt(self.y_min))) / @as(f64, @floatFromInt(y_range));
+            var norm_x = (x - @as(f64, @floatFromInt(self.x_min))) / @as(f64, @floatFromInt(x_range));
+            var norm_y = (y - @as(f64, @floatFromInt(self.y_min))) / @as(f64, @floatFromInt(y_range));
+
+            norm_x = std.math.clamp(norm_x, 0.0, 1.0);
+            norm_y = std.math.clamp(norm_y, 0.0, 1.0);
 
             const pixel_x = @min(self.width - 1, @as(usize, @intFromFloat(norm_x * @as(f64, @floatFromInt(self.width)))));
             const pixel_y = @min(self.height - 1, @as(usize, @intFromFloat((1.0 - norm_y) * @as(f64, @floatFromInt(self.height)))));
@@ -69,6 +72,7 @@ pub const Plot = struct {
 
     pub fn savePlot(self: *Plot) !void {
         try stdout.print("Plot saved as \x1b[31m\x1b[1m {s} \x1b[0m \x1b[0m\n", .{self.image.name});
+        //try self.image.saveImageBuffered();
         try self.image.saveImage();
     }
 
@@ -76,12 +80,13 @@ pub const Plot = struct {
         if (x.len != y.len) {
             return error.InvalidPoints;
         }
-        const default_rad: f64 = 2;
+        const default_rad: f64 = 3;
         for (x, y) |x_val, y_val| {
             self.drawCircle(x_val, y_val, default_rad, c);
         }
     }
-    fn drawRectangle(self: *Plot, x: f64, y: f64, rectangle_width: f64, rectangle_height: f64, color: Color) void {
+
+    pub fn drawRectangle(self: *Plot, x: f64, y: f64, rectangle_width: f64, rectangle_height: f64, color: Color) void {
         const pixel_coord = self.coord.cartesianToPixel(x, y);
 
         const center_x = @as(isize, @intCast(pixel_coord.x));
@@ -98,9 +103,7 @@ pub const Plot = struct {
                 const py = center_y + dy;
                 if (px >= 0 and py > 0 and @as(usize, @intCast(px)) < self.coord.width and @as(usize, @intCast(py)) < self.coord.height) {
                     const index = @as(usize, @intCast(py)) * self.coord.width + @as(usize, @intCast(px));
-                    self.image.image_buffer[index][0] = color.r;
-                    self.image.image_buffer[index][1] = color.g;
-                    self.image.image_buffer[index][2] = color.b;
+                    self.image.setPixel(index, color);
                 }
             }
         }
@@ -122,12 +125,59 @@ pub const Plot = struct {
                     const py = center_y + dy;
                     if (px >= 0 and px < self.coord.width and py >= 0 and py < self.coord.height) {
                         const index = @as(usize, @intCast(py)) * self.coord.width + @as(usize, @intCast(px));
-                        self.image.image_buffer[index][0] = color.r;
-                        self.image.image_buffer[index][1] = color.g;
-                        self.image.image_buffer[index][2] = color.b;
+                        self.image.setPixel(index, color);
                     }
                 }
             }
+        }
+    }
+    pub fn drawLine(self: *Plot, x0: f64, y0: f64, x1: f64, y1: f64, color: Color, thickness: usize) void {
+        const p0 = self.coord.cartesianToPixel(x0, y0);
+        const p1 = self.coord.cartesianToPixel(x1, y1);
+
+        const x0f = @as(f64, @floatFromInt(p0.x));
+        const y0f = @as(f64, @floatFromInt(p0.y));
+        const x1f = @as(f64, @floatFromInt(p1.x));
+        const y1f = @as(f64, @floatFromInt(p1.y));
+
+        const dx = x1f - x0f;
+        const dy = y1f - y0f;
+        const steps = @max(@abs(dx), @abs(dy));
+
+        if (steps == 0) return; // Prevent div by zero
+
+        const x_inc = dx / steps;
+        const y_inc = dy / steps;
+
+        var xf = x0f;
+        var yf = y0f;
+
+        const half_thick = @as(i64, @intCast(thickness / 2));
+
+        var i: usize = 0;
+        while (i <= @as(usize, @intFromFloat(steps))) : (i += 1) {
+            const xi = @as(i64, @intFromFloat(@round(xf)));
+            const yi = @as(i64, @intFromFloat(@round(yf)));
+
+            // Draw a square of pixels centered around (xi, yi)
+            var dy_off: i64 = -half_thick;
+            while (dy_off <= half_thick) : (dy_off += 1) {
+                var dx_off: i64 = -half_thick;
+                while (dx_off <= half_thick) : (dx_off += 1) {
+                    const px = xi + dx_off;
+                    const py = yi + dy_off;
+
+                    if (px >= 0 and py >= 0 and px < self.coord.width and py < self.coord.height) {
+                        const ux = @as(usize, @intCast(px));
+                        const uy = @as(usize, @intCast(py));
+                        const index = uy * self.coord.width + ux;
+                        self.image.setPixel(index, color);
+                    }
+                }
+            }
+
+            xf += x_inc;
+            yf += y_inc;
         }
     }
 };
@@ -178,6 +228,28 @@ const Image = struct {
 
     pub fn destoryImage(self: *Image) void {
         Allocator.free(self.image_buffer);
+    }
+    fn setPixel(self: *Image, index: usize, c: Color) void {
+        self.image_buffer[index][0] = c.r;
+        self.image_buffer[index][1] = c.g;
+        self.image_buffer[index][2] = c.b;
+    }
+
+    pub fn saveImageBuffered(self: *Image) !void {
+        const file = try cwd.createFile(self.name, .{ .truncate = true });
+        defer file.close();
+
+        var buffered_writer = std.io.bufferedWriter(file.writer());
+        const writer = buffered_writer.writer();
+
+        // Write header
+        try writer.print("P6\n{} {}\n{}\n", .{ self.width, self.height, 255 });
+
+        // Write image data
+        const raw_bytes = @as([*]const u8, @ptrCast(self.image_buffer.ptr))[0 .. self.image_buffer.len * 3];
+        try writer.writeAll(raw_bytes);
+
+        try buffered_writer.flush();
     }
 
     pub fn saveImage(self: *Image) !void {
