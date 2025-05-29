@@ -66,5 +66,5 @@ pub fn main() !void {
 ```
 Output Plot:
 
-![Resultant Plot][https://github.com/J-A-G-A-N/zig-plot/blob/17f88fea489431826e5c20a3fa77fbc3fb83b6bc/plot.png]
+![Resultant Plot](https://github.com/J-A-G-A-N/zig-plot/blob/17f88fea489431826e5c20a3fa77fbc3fb83b6bc/plot.png)
 
