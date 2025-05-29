@@ -40,7 +40,10 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
     });
     exe.linkLibC();
-
+    const no_llvm = b.option(bool, "no-llvm", "Don't use llvm") orelse false;
+    if (no_llvm) {
+        exe.use_llvm = false;
+    }
     const no_bin = b.option(bool, "no-bin", "skip emiting binary") orelse false;
     if (no_bin) {
         b.getInstallStep().dependOn(&exe.step);

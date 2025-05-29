@@ -1,18 +1,38 @@
 const std = @import("std");
 const lib = @import("zig_plot_lib");
+fn generate_x_power_2(comptime N: usize, x: [*]f64, y: [*]f64) void {
+    inline for (0..N) |i| {
+        x[i] = @as(f64, @floatFromInt(2 * i));
+        y[i] = @as(f64, x[i] * x[i]);
+    }
+}
 
+fn generate_sine_points(comptime N: usize, x: [*]f64, y: [*]f64, x_min: f64, x_max: f64) void {
+    var dx = (x_max - x_min) / @as(f64, N - 1);
+    dx *= 2.8;
+    inline for (0..N) |i| {
+        const x_val = x_min + dx * @as(f64, i);
+        x[i] = x_val;
+        y[i] = -20.0 * std.math.sin(x_val);
+    }
+}
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
     const width: i32 = 1920;
     const height: i32 = 1080;
+    const N: usize = 10;
+    var x: [N]f64 = undefined;
+    var y: [N]f64 = undefined;
 
-    var plot: lib.Plot = try lib.Plot.init(allocator, null, .center, width, height);
+    var plot: *lib.Plot = try lib.Plot.init(allocator, null, .center, width, height, .Light);
     defer plot.deinit();
 
-    plot.setTheme(.Light);
-
-    plot.image.drawLine(0, -300, 0, 300, 2, lib.color.getColor(.black));
-    plot.image.drawLine(-300, 0, 300, 0, 2, lib.color.getColor(.black));
+    generate_x_power_2(N, &x, &y);
+    try plot.image.drawPoints(&x, &y, null, lib.color.getColor(.red));
+    generate_sine_points(N, &x, &y, 0, 100);
+    try plot.image.drawPoints(&x, &y, null, lib.color.getColor(.blue));
+    //plot.image.drawCircle(-200, 150, 50, lib.color.getColor(.red));
+    //plot.image.drawRectange(250, 100, 200, 100, lib.color.getColor(.green));
     const start = std.time.milliTimestamp();
     try plot.savePlot();
     const end = std.time.milliTimestamp();

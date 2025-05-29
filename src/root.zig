@@ -21,22 +21,36 @@ const vec2u32 = struct { x: u32, y: u32 };
 pub const Plot = struct {
     image: Image,
     allocator: std.mem.Allocator,
-
-    pub fn init(allocator: std.mem.Allocator, plot_name: ?[]const u8, cartesian_origin: CartesianOrigin, width: u32, height: u32) !@This() {
+    pub fn create(allocator: std.mem.Allocator, plot_name: ?[]const u8, cartesian_origin: CartesianOrigin, width: u32, height: u32) !*@This() {
         const p_name = plot_name orelse "plot.png";
-        return .{
-            .image = try .createImage(allocator, p_name, cartesian_origin, width, height),
-            .allocator = allocator,
-        };
+        var plot = try allocator.create(Plot);
+        plot.image = try .createImage(allocator, p_name, cartesian_origin, width, height);
+        plot.allocator = allocator;
+        return plot;
+    }
+    pub fn init(allocator: std.mem.Allocator, plot_name: ?[]const u8, cartesian_origin: CartesianOrigin, width: u32, height: u32, theme: Theme) !*@This() {
+        var plot = try Plot.create(allocator, plot_name, cartesian_origin, width, height);
+
+        plot.setTheme(theme);
+        const axis_color = color.getColor(switch (theme) {
+            .Dark => .white,
+            .Light => .black,
+        });
+
+        plot.image.drawLine(0, -300, 0, 300, 2, axis_color);
+        plot.image.drawLine(-300, 0, 300, 0, 2, axis_color);
+
+        return plot;
     }
     pub fn deinit(self: *@This()) void {
         self.image.destoryImage();
+        self.allocator.destroy(self);
     }
     pub fn setTheme(self: *@This(), theme: Theme) void {
-        switch (theme) {
-            .Dark => self.image.clearImage(color.getColor(.black)),
-            .Light => self.image.clearImage(color.getColor(.white)),
-        }
+        self.image.clearImage(color.getColor(switch (theme) {
+            .Dark => .black,
+            .Light => .white,
+        }));
     }
     pub fn savePlot(self: *@This()) !void {
         //try self.image.saveImageBuffered();
@@ -133,11 +147,11 @@ const Image = struct {
     }
 
     fn setImagePixel(self: *@This(), x: u32, y: u32, c: color.Color) void {
-        const i: usize = x * y;
-        self.image_buffer[i][0] = c.r;
-        self.image_buffer[i][1] = c.g;
-        self.image_buffer[i][2] = c.b;
-        self.image_buffer[i][3] = c.a;
+        const index: usize = y * self.width + x;
+        self.image_buffer[index][0] = c.r;
+        self.image_buffer[index][1] = c.g;
+        self.image_buffer[index][2] = c.b;
+        self.image_buffer[index][3] = c.a;
     }
 
     pub fn drawRectange(self: *@This(), center_x: f64, center_y: f64, rect_width: u32, rect_height: u32, c: color.Color) void {
@@ -185,6 +199,13 @@ const Image = struct {
         c
         );
         // zig fmt: on
+    }
+    pub fn drawPoints(self: *@This(), x: []f64, y: []f64, radius: ?f64, c: color.Color) !void {
+        if (x.len != y.len) return error.X_and_Y_are_not_equal_in_length;
+        const rad: f64 = radius orelse 2.0;
+        for (x, y) |x_val, y_val| {
+            self.drawCircle(x_val, y_val, rad, c);
+        }
     }
 };
 const Draw = struct {
