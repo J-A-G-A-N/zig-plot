@@ -27,6 +27,7 @@ pub const Plot = struct {
     image: Image,
     allocator: std.mem.Allocator,
     var theme_var: Theme = undefined;
+
     fn create(allocator: std.mem.Allocator, plot_name: ?[]const u8, cartesian_origin: CartesianOrigin, width: u32, height: u32) !*@This() {
         const p_name = plot_name orelse "plot.png";
         var p = try allocator.create(Plot);
@@ -52,9 +53,6 @@ pub const Plot = struct {
         }
     }
 
-    // fn calculateAxisBounds(x:[]f64,y:[]f64)void{
-    //
-    // }
     pub fn drawAxis(self: *@This()) void {
         const axis_color = color.getColor(switch (theme_var) {
             .Dark => .white,
@@ -68,14 +66,11 @@ pub const Plot = struct {
         const top = @as(f64, @floatFromInt(cart_coord.top));
         const bottom = @as(f64, @floatFromInt(cart_coord.bottom));
 
-        const x_margin = 0.05 * (right - left);
-        const y_margin = 0.05 * (bottom - top);
-
         // X axis: horizontal line with x-range padding
         self.image.drawLine(
-            left + x_margin,
+            left,
             0,
-            right - x_margin,
+            right,
             0,
             2,
             axis_color,
@@ -84,12 +79,13 @@ pub const Plot = struct {
         // Y axis: vertical line with y-range padding
         self.image.drawLine(
             0,
-            top + y_margin,
+            top,
             0,
-            bottom - y_margin,
+            bottom,
             2,
             axis_color,
         );
+        self.image.drawCircle(0, 0, 4, color.getColor(.black));
     }
 
     pub fn deinit(self: *@This()) void {
@@ -192,7 +188,10 @@ const Image = struct {
         c);
         // zig fmt: on
     }
-
+    pub fn autoSetAxisBounds(self: *@This(), x: []f64, y: []f64) !void {
+        const bounds = try self.coord.cart_coord.calculateAxisBounds(x, y);
+        self.customCartesianCoordinate(bounds.x_min, bounds.x_max, bounds.y_max, bounds.y_min);
+    }
     pub fn drawCircle(self: *@This(), center_x: f64, center_y: f64, radius: f64, c: color.Color) void {
         const pixel_coord = self.coord.cartesianToPixel(center_x, center_y);
         const rad: u32 = @intFromFloat(radius);
@@ -362,19 +361,6 @@ const Coordinate = struct {
             .pixel_coord = .init(width, height),
         };
     }
-    // fn cartesianToPixel(self: *@This(), x: f64, y: f64) vec2u32 {
-    //     const x_range = self.cart_coord.right - self.cart_coord.left;
-    //     const y_range = self.cart_coord.bottom - self.cart_coord.top;
-    //
-    //     const norm_x = std.math.clamp((x - self.cart_coord.left) / x_range, 0.0, 1.0);
-    //     const norm_y = std.math.clamp((y - self.cart_coord.top) / y_range, 0.0, 1.0);
-    //     const w: f64 = @floatFromInt(self.cart_coord.width);
-    //     const h: f64 = @floatFromInt(self.cart_coord.height);
-    //     const pixel_x = @min(self.cart_coord.width - 1, @as(u32, @intFromFloat(norm_x * w)));
-    //     const pixel_y = @min(self.cart_coord.height - 1, @as(u32, @intFromFloat((1.0 - norm_y) * h)));
-    //
-    //     return .{ .x = pixel_x, .y = pixel_y };
-    // }
     fn cartesianToPixel(self: *@This(), x: f64, y: f64) vec2u32 {
         const x_left: f64 = @floatFromInt(self.cart_coord.left);
         const x_right: f64 = @floatFromInt(self.cart_coord.right);
@@ -395,6 +381,27 @@ const Coordinate = struct {
         const pixel_y = @min(self.cart_coord.height - 1, @as(u32, @intFromFloat((norm_y) * h)));
 
         return .{ .x = pixel_x, .y = pixel_y };
+    }
+
+    fn pixelToCartesian(self: *@This(), px: u32, py: u32) struct { x: f64, y: f64 } {
+        const x_left: f64 = @floatFromInt(self.cart_coord.left);
+        const x_right: f64 = @floatFromInt(self.cart_coord.right);
+        const x_range = x_right - x_left;
+
+        const y_top: f64 = @floatFromInt(self.cart_coord.top);
+        const y_bottom: f64 = @floatFromInt(self.cart_coord.bottom);
+        const y_range = y_bottom - y_top;
+
+        const w: f64 = @floatFromInt(self.cart_coord.width);
+        const h: f64 = @floatFromInt(self.cart_coord.height);
+
+        const norm_x = @as(f64, @floatFromInt(px)) / w;
+        const norm_y = @as(f64, @floatFromInt(py)) / h;
+
+        const x = norm_x * x_range + x_left;
+        const y = norm_y * y_range + y_top;
+
+        return .{ .x = x, .y = y };
     }
 };
 
@@ -467,6 +474,63 @@ const CartesianCoord = struct {
             .right = @intCast(width),
             .top = -50,
             .bottom = @intCast(height),
+        };
+    }
+
+    const AxisBounds = struct {
+        x_min: f64,
+        x_max: f64,
+        y_min: f64,
+        y_max: f64,
+    };
+    pub fn normalize(x_start: f64) f64 {
+        if (x_start == 0.0) return 0.0;
+
+        const is_negative = x_start < 0.0;
+        var x = if (is_negative) -x_start else x_start;
+        var exponent: i32 = 0;
+
+        while (x < 0.1) : (exponent += 1) {
+            x *= 10.0;
+        }
+
+        if (is_negative) x = -x;
+
+        std.debug.print("Normalized value: {}, Exponent: -{}\n", .{ x, exponent });
+        return x;
+    }
+    fn calculateAxisBounds(self: *@This(), x: []f64, y: []f64) !AxisBounds {
+        _ = self;
+        if (x.len != y.len or x.len == 0 or y.len == 0) return error.InvalidBound;
+        var x_min = x[0];
+        var x_max = x[0];
+        var y_min = y[0];
+        var y_max = y[0];
+        for (x) |val| {
+            x_min = @min(val, x_min);
+            x_max = @max(val, x_max);
+        }
+        for (y) |val| {
+            y_min = @min(val, y_min);
+            y_max = @max(val, y_max);
+        }
+        y_min = normalize(y_min);
+        x_min = @round(x_min);
+        y_min = @round(y_min);
+
+        const x_range = x_max - x_min;
+        const y_range = y_max - y_min;
+        const x_padding = x_range * 0.1;
+        const y_padding = y_range * 0.1;
+
+        // Handle case where range is zero (constant values)
+        const final_x_padding = if (x_range == 0) 1.0 else x_padding;
+        const final_y_padding = if (y_range == 0) 1.0 else y_padding;
+        return AxisBounds{
+            .x_min = x_min - final_x_padding,
+            .x_max = x_max + final_x_padding,
+            .y_min = y_min - final_y_padding,
+            .y_max = y_max + final_y_padding,
         };
     }
 };

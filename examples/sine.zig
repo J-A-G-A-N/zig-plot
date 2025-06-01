@@ -1,35 +1,8 @@
-# zig-plot-lib
-
-A simple plotting library in Zig that renders 2D plots and saves them as `.ppm` (P6) image files.
-This library is underdevelopment.
-This library currently allows you to:
-- Draw points on a Cartesian coordinate system.
-- Save the plotted image in raw binary PPM format.
-- Time execution of drawing and saving steps.
-
----
-
-## 🚀 Getting Started
-
-### 📦 Build
-
-Make sure you have [Zig](https://ziglang.org/download/) installed.
-version : 0.14.0
-
-```sh
-zig build run --release=fast
-# To view
-feh plot.png
-```
-
-
-### Example program
-```zig
 const std = @import("std");
 const lib = @import("zig_plot_lib");
-const tf = @import("test_functions.zig");
 
 pub fn main() !void {
+
     // Set Up allocator
     var da = std.heap.DebugAllocator(.{}){};
     defer _ = da.deinit();
@@ -37,24 +10,26 @@ pub fn main() !void {
 
     const width = 1920;
     const height = 1080;
-    const N = 100;
+    const N = 400;
     var x: [N]f64 = undefined;
     var y: [N]f64 = undefined;
-    const pi = std.math.pi;
-    const min_range = -pi;
-    const max_range = pi;
+    const pi = 180;
+    const min_range = -pi / 6.0;
+    const max_range = pi / 6.0;
 
     // Generate Points For plotting
     linspace(N, &x, min_range, max_range);
-    try tf.tan(null, &x, &y);
+    try sin(&x, &y);
+
     // Create a Plot Instance
     // null for default plot name
     // origin is custom as we are going to set it
-    var plot = try lib.Plot.init(allocator, null, .custom, width, height, .Light);
+    var plot = try lib.Plot.init(allocator, "sine.png", .custom, width, height, .Light);
     defer plot.deinit();
 
-    try plot.image.autoSetAxisBounds(&x, &y);
+    plot.image.customCartesianCoordinate(-40, 40, 5, -5);
     plot.drawAxis();
+    plot.image.drawCircle(0, 0, 4, lib.color.getColor(.black));
 
     var time_start = std.time.milliTimestamp();
     try plot.plot(&x, &y, 2, lib.color.getColor(.blue));
@@ -73,9 +48,12 @@ fn linspace(comptime N: usize, x: [*]f64, min: f64, max: f64) void {
         x[i] = min + dx * @as(f64, i);
     }
 }
-
-```
-Output Plot:
-
-![Resultant Plot](./plot.png)
-
+const MathError = error{
+    MismatchedLengths,
+};
+fn sin(x: []f64, y: []f64) !void {
+    if (x.len != y.len) return MathError.MismatchedLengths;
+    for (0..x.len) |i| {
+        y[i] = std.math.sin(x[i]);
+    }
+}
