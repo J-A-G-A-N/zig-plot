@@ -17,11 +17,10 @@ pub fn main() !void {
     defer _ = da.deinit();
     const allocator = da.allocator();
 
-    var plot = try lib.Plot.init(allocator, "tan.png", .custom, width, height, .Dark);
+    var plot = try lib.LinePlot.init(allocator, "tan.png", width, height, .Dark);
     defer plot.deinit();
 
     plot.image.customCartesianCoordinate(-10, 10, 100, -100);
-    plot.drawAxis();
     try plot.plot(&x, &y, 2, lib.color.getColor(.red));
     try plot.save();
 }

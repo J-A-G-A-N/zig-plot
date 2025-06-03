@@ -1,5 +1,6 @@
 const std = @import("std");
 const lib = @import("zig_plot_lib");
+const tf = @import("test_functions.zig");
 fn generate_x_power_2(comptime N: usize, x: [*]f64, y: [*]f64) void {
     inline for (0..N) |i| {
         y[i] = @as(f64, x[i] * x[i]);
@@ -26,7 +27,7 @@ fn generate_cos_points(comptime N: usize, x: [*]f64, y: [*]f64) void {
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
-    const width: i32 = 600;
+    const width: i32 = 620;
     const height: i32 = 480;
     const N: usize = 500;
     var x: [N]f64 = undefined;
@@ -41,31 +42,28 @@ pub fn main() !void {
     var end = std.time.milliTimestamp();
 
     // zig fmt: off
-    var plot: *lib.Plot = try lib.Plot.init(allocator,
+    var plot: *lib.LinePlot = try lib.LinePlot.init(allocator,
     "example.png",
-    .custom,
     width,
     height,
     .Light
     );
-    plot.image.customCartesianCoordinate(-20, 20, 10,-10);
 
     plot.image.drawCircle(0, 0,4, lib.color.getColor(.black));
     // zig fmt: on
     defer plot.deinit();
     linspace(N, &x, trig_min, trig_max);
-    generate_sine_points(N, &x, &y);
+    try tf.sin(N, &x, &y);
     try plot.plot(&x, &y, 2, lib.color.getColor(.red));
     trig_min = 5 * -(std.math.pi);
     trig_max = 5 * (std.math.pi);
 
     linspace(N, &x, trig_min, trig_max);
-    generate_cos_points(N, &x, &y);
+    try tf.cos(1, &x, &y);
     try plot.plot(&x, &y, 2, lib.color.getColor(.blue));
 
     linspace(N, &x, parabola_min, parabola_max);
-    generate_x_power_2(
-        N,
+    try tf.z3(
         &x,
         &y,
     );

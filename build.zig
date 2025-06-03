@@ -96,7 +96,7 @@ fn buildExample(
     if (b.args) |args| {
         run_example_cmd.addArgs(args);
     }
-    const run_example_step = b.step("run", "Run the specified example");
+    const run_example_step = b.step("run-example", "Run the specified example");
     run_example_step.dependOn(&run_example_cmd.step);
 }
 

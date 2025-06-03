@@ -8,8 +8,8 @@ pub fn main() !void {
     defer _ = da.deinit();
     const allocator = da.allocator();
 
-    const width = 1920;
-    const height = 1080;
+    const width = 620;
+    const height = 480;
     const N = 400;
     var x: [N]f64 = undefined;
     var y: [N]f64 = undefined;
@@ -24,11 +24,10 @@ pub fn main() !void {
     // Create a Plot Instance
     // null for default plot name
     // origin is custom as we are going to set it
-    var plot = try lib.Plot.init(allocator, "sine.png", .custom, width, height, .Light);
+    var plot = try lib.LinePlot.init(allocator, "sine.png", width, height, .Light);
     defer plot.deinit();
 
     plot.image.customCartesianCoordinate(-40, 40, 5, -5);
-    plot.drawAxis();
     plot.image.drawCircle(0, 0, 4, lib.color.getColor(.black));
 
     var time_start = std.time.milliTimestamp();
