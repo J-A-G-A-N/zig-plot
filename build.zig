@@ -13,6 +13,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    lib_mod.addIncludePath(b.path("deps/"));
+    lib_mod.addIncludePath(.{ .cwd_relative = "/usr/include/freetype2" });
+    lib_mod.addIncludePath(.{ .cwd_relative = "/usr/include/freetype2/freetype/" });
+    lib_mod.linkSystemLibrary("freetype", .{});
+
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -20,7 +25,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
-    exe_mod.addImport("zig_plot_lib", lib_mod);
+    exe_mod.addImport("zig_plot", lib_mod);
 
     const lib = b.addLibrary(.{
         .linkage = .static,
@@ -28,7 +33,6 @@ pub fn build(b: *std.Build) void {
         .root_module = lib_mod,
     });
     lib.step.dependOn(&download_step.step);
-    lib.addIncludePath(b.path("deps/"));
 
     const no_lib = b.option(bool, "no-lib", "skip emitting library") orelse false;
     if (no_lib) {
@@ -83,7 +87,7 @@ fn buildExample(
         .link_libc = true,
     });
 
-    example_mod.addImport("zig_plot_lib", lib_mod);
+    example_mod.addImport("zig_plot", lib_mod);
 
     const example_exe = b.addExecutable(.{
         .name = name,

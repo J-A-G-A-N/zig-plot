@@ -1,13 +1,14 @@
 const std = @import("std");
 const stdout = std.io.getStdOut().writer();
 const cwd = std.fs.cwd();
+pub const Font = @import("Font.zig").Font;
 // Custom Imports
 pub const color = @import("color.zig");
 const siw = @cImport({
     @cDefine("STB_IMAGE_WRITE_IMPLEMENTATION", "");
     @cInclude("../deps/stb_image_write.h");
 });
-
+const font_file_path = "deps/FiraCodeNerdFont-Regular.ttf";
 // TODO
 //implement catmull-rom spline
 // ref :
@@ -52,6 +53,7 @@ pub const LinePlot = struct {
             self.image.drawLine(x0, y0, x1, y1, line_thickness, c);
         }
     }
+
     pub fn scatter(self: *@This(), x: []f64, y: []f64, radius: ?f64, c: color.Color) !void {
         if (x.len != y.len) return error.DataLenghtNotEqual;
         try self.image.autoSetAxisBounds(x, y);
@@ -127,6 +129,8 @@ const BoundingBox = struct {
     bottom: u32,
     left: u32,
     right: u32,
+    center_x: u32,
+    center_y: u32,
 
     pub fn init(image_width: u32, image_height: u32, padding: u32) BoundingBox {
         const pad = padding;
@@ -140,7 +144,17 @@ const BoundingBox = struct {
             .right = right,
             .top = pad,
             .bottom = bottom,
+            // .center_x = pad + ((right - pad) / 2),
+            // .center_y = pad + ((bottom - pad) / 2),
+            .center_x = (pad + right) / 2,
+            .center_y = (bottom + pad) / 2,
         };
+    }
+    pub fn printBoundingBox(self: *@This()) void {
+        std.debug.print("{any}\n", .{self});
+    }
+    pub fn returnBoudingBox(self: *@This()) @This() {
+        return self.*;
     }
 };
 const Image = struct {
@@ -278,6 +292,18 @@ const Image = struct {
         );
         // zig fmt: on
     }
+    pub fn drawText(self: *@This(), text: []const u8, text_size: u32, cx: u32, cy: u32) !void {
+        try Draw.text(
+            self.allocator,
+            self.image_buffer,
+            text,
+            text_size,
+            cx,
+            cy,
+            self.width,
+            self.height,
+        );
+    }
 };
 const Draw = struct {
     fn setPixel(buf: []Pixel, index: usize, width: u32, height: u32, c: color.Color) void {
@@ -398,6 +424,20 @@ const Draw = struct {
                 y0 += sy;
             }
         }
+    }
+    pub fn text(allocator: std.mem.Allocator, buff: []Pixel, Text: []const u8, text_size: u32, cx: u32, cy: u32, width: u32, height: u32) !void {
+        const font = try Font.init(allocator, font_file_path);
+        defer font.deinit();
+        try font.drawText(
+            text_size,
+            cx,
+            cy,
+            Pixel,
+            buff,
+            width,
+            height,
+            Text,
+        );
     }
 };
 const Coordinate = struct {
