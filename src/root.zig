@@ -1,17 +1,16 @@
 const std = @import("std");
-const core = @import("core.zig");
+pub const core = @import("core.zig");
 pub const color = core.color;
-pub const LineLayer = core.LinePlotLayer;
-pub const Plot = core.Plot;
+pub const Font = @import("Font.zig").Font;
 export var stbi_write_png_compression_level: c_int = 8;
 export var stbi_write_force_png_filter: c_int = -1;
-
 pub const RasterCanvas = struct {
     width: u32,
     height: u32,
     pixels: []core.color.Color,
     allocator: std.mem.Allocator,
     name: []const u8,
+    font: *Font,
 
     pub fn init(allocator: std.mem.Allocator, width: u32, height: u32, name: []const u8) !@This() {
         const pixel_count = width * height;
@@ -21,11 +20,13 @@ pub const RasterCanvas = struct {
             .height = height,
             .pixels = pixels,
             .name = name,
+            .font = try Font.init(allocator, "deps/FiraCodeNerdFont-Regular.ttf"),
             .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *@This()) void {
+        self.font.deinit();
         self.allocator.free(self.pixels);
     }
 
@@ -35,6 +36,7 @@ pub const RasterCanvas = struct {
             .drawLine = drawLineImpl,
             .drawRectangle = drawRectImpl,
             .drawCircle = drawCircleImpl,
+            .drawText = drawTextImpl,
             .clear = clearImpl,
             .getDimensions = getDimensionsImpl,
         } };
@@ -62,6 +64,10 @@ pub const RasterCanvas = struct {
     pub fn drawPixelImpl(ptr: *anyopaque, x: u32, y: u32, c: core.color.Color) void {
         const self: *@This() = @ptrCast(@alignCast(ptr));
         self.setPixelSafe(x, y, c);
+    }
+    pub fn drawTextImpl(ptr: *anyopaque, cx: u32, cy: u32, text: []const u8, text_size: f32, c: color.Color) !void {
+        const self: *@This() = @ptrCast(@alignCast(ptr));
+        try self.font.drawText(self.pixels, text, text_size, cx, cy, self.width, self.height, c);
     }
     pub fn drawLineImpl(ptr: *anyopaque, x0: u32, y0: u32, x1: u32, y1: u32, thickness: u32, c: core.color.Color) void {
         const self: *@This() = @ptrCast(@alignCast(ptr));
@@ -176,7 +182,9 @@ pub const RasterCanvas = struct {
             }
         }
     }
-
+    pub fn drawText(self: *@This(), cx: u32, cy: u32, text: []const u8, text_size: f32, c: color.Color) !void {
+        try self.font.drawText(self.pixels, text, text_size, cx, cy, self.width, self.height, c);
+    }
     pub fn save(self: *@This()) !void {
         const siw = @cImport({
             @cDefine("STB_IMAGE_WRITE_IMPLEMENTATION", "");

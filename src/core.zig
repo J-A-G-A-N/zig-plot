@@ -1,5 +1,7 @@
 const std = @import("std");
 pub const color = @import("color.zig");
+pub const FontZIG = @import("Font.zig");
+pub const Font = @import("Font.zig").Font;
 pub const Canvas = struct {
     ptr: *anyopaque,
     vtable: *const VTable,
@@ -8,10 +10,13 @@ pub const Canvas = struct {
         drawLine: *const fn (ptr: *anyopaque, x0: u32, y0: u32, x1: u32, y1: u32, thickness: u32, c: color.Color) void,
         drawRectangle: *const fn (ptr: *anyopaque, cx: u32, cy: u32, width: u32, height: u32, c: color.Color) void,
         drawCircle: *const fn (ptr: *anyopaque, cx: u32, cy: u32, radius: u32, c: color.Color) void,
+        drawText: *const fn (ptr: *anyopaque, cx: u32, cy: u32, text: []const u8, text_size: f32, c: color.Color) FontZIG.FontError!void,
         clear: *const fn (ptr: *anyopaque, c: color.Color) void,
         getDimensions: *const fn (ptr: *anyopaque) Dim,
     };
-
+    pub fn drawText(self: @This(), cx: u32, cy: u32, text: []const u8, text_size: f32, c: color.Color) !void {
+        try self.vtable.drawText(self.ptr, cx, cy, text, text_size, c);
+    }
     pub fn drawPixel(self: @This(), x: u32, y: u32, c: color.Color) void {
         self.vtable.drawPixel(self.ptr, x, y, c);
     }
@@ -28,7 +33,7 @@ pub const Canvas = struct {
         self.vtable.clear(self.ptr, c);
     }
     pub fn getDimensions(self: @This()) Dim {
-        self.vtable.getDimensions(self.ptr);
+        return self.vtable.getDimensions(self.ptr);
     }
 };
 
@@ -113,7 +118,9 @@ pub const RenderContext = struct {
         const canvas_dim = self.canvas.getDimensions();
         const scale_x = @as(f64, @floatFromInt(canvas_dim.width)) / bounds.width();
         const screen_radius = @as(u32, @intFromFloat(radius * scale_x));
-        self.canvas.drawCircle(screen_center.x, screen_center.y, screen_radius, c);
+        const screeen_center_x_u32: u32 = @intFromFloat(screen_center.x);
+        const screeen_center_y_u32: u32 = @intFromFloat(screen_center.y);
+        self.canvas.drawCircle(screeen_center_x_u32, screeen_center_y_u32, screen_radius, c);
     }
 };
 
@@ -219,10 +226,10 @@ pub const LinePlotLayer = struct {
 pub const ScatterPlotLayer = struct {
     points: std.ArrayList(Point2D),
     c: color.Color,
-    radius: u32,
+    radius: f64,
     visible: bool,
 
-    pub fn init(allocator: std.mem.Allocator, c: color, radius: u32) @This() {
+    pub fn init(allocator: std.mem.Allocator, c: color.Color, radius: f64) @This() {
         return .{
             .points = std.ArrayList(Point2D).init(allocator),
             .c = c,
@@ -236,7 +243,7 @@ pub const ScatterPlotLayer = struct {
     pub fn addPoint(self: @This(), point: Point2D) !void {
         try self.points.append(point);
     }
-    pub fn setData(self: @This(), x_data: []const u8, y_data: []const u8) !void {
+    pub fn setData(self: *@This(), x_data: []const f64, y_data: []const f64) !void {
         if (x_data.len != y_data.len) return error.MismatchedDataLenght;
         self.points.clearRetainingCapacity();
         for (x_data, y_data) |x, y| {
@@ -248,9 +255,8 @@ pub const ScatterPlotLayer = struct {
     }
     fn renderImpl(ptr: *anyopaque, ctx: RenderContext) void {
         const self: *@This() = @ptrCast(@alignCast(ptr));
-        const points = self.points;
-        for (0..points.items.len - 1) |i| {
-            ctx.drawWorldCircle(points[i], points[i + 1], self.radius, self.c);
+        for (self.points.items) |point| {
+            ctx.drawWorldCircle(point, self.radius, self.c);
         }
     }
     fn getBoundsImpl(ptr: *anyopaque) ?Bounds2D {
@@ -259,13 +265,13 @@ pub const ScatterPlotLayer = struct {
         if (points.items.len == 0) return null;
 
         var bounds = Bounds2D{
-            .min_x = points[0].x,
-            .min_y = points[0].y,
-            .max_x = points[0].x,
-            .max_y = points[0].y,
+            .min_x = points.items[0].x,
+            .min_y = points.items[0].y,
+            .max_x = points.items[0].x,
+            .max_y = points.items[0].y,
         };
 
-        for (points[1..]) |point| {
+        for (points.items[1..]) |point| {
             bounds.min_x = @min(bounds.min_x, point.x);
             bounds.min_y = @min(bounds.min_y, point.y);
             bounds.max_x = @max(bounds.max_x, point.x);
@@ -273,7 +279,7 @@ pub const ScatterPlotLayer = struct {
         }
         return bounds;
     }
-    pub fn setVisibleImpl(ptr: *anyopaque, visible: bool) bool {
+    pub fn setVisibleImpl(ptr: *anyopaque, visible: bool) void {
         const self: *@This() = @ptrCast(@alignCast(ptr));
         self.visible = visible;
     }
@@ -340,7 +346,6 @@ pub const Plot = struct {
             layer.render(ctx);
         }
     }
-
     pub fn updateBounds(self: *@This()) void {
         var combined_bounds: ?Bounds2D = null;
 
@@ -372,7 +377,6 @@ pub const Plot = struct {
             self.transform.setBounds(padded_bounds);
         }
     }
-
     pub fn setounds(self: *@This(), bounds: Bounds2D) void {
         self.auto_bounds = false;
         self.transform.setBounds(bounds);

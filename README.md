@@ -37,6 +37,7 @@ pub fn main() !void {
     const N = 100;
     var x: [N]f64 = undefined;
     var y: [N]f64 = undefined;
+
     const pi: f64 = 180;
     const factor = 0.2;
     const min_range: f64 = -factor * pi;
@@ -55,14 +56,19 @@ pub fn main() !void {
         bounds.x_max,
         bounds.y_max,
     );
-    var plot = lib.Plot.init(allocator, rc.asCanvas(), cartesian_transform.asTransform());
-    var line_layer = lib.LineLayer.init(allocator, lib.color.getColor(.green), 2);
-    defer line_layer.deinit();
+    var plot = lib.core.Plot.init(allocator, rc.asCanvas(), cartesian_transform.asTransform());
+    defer plot.deinit();
 
-    try line_layer.setData(&x, &y);
-    try plot.addLayers(line_layer.asLayer());
+    var ln_layer = lib.core.LinePlotLayer.init(allocator, lib.color.getColor(.blue), 2);
+    defer ln_layer.deinit();
+    try ln_layer.setData(&x, &y);
+    try plot.addLayers(ln_layer.asLayer());
 
     plot.render();
+    const center_x = width / 2;
+    const text_size = 30;
+    const title: []const u8 = "y = x Six(x)";
+    try rc.drawText(center_x, 50, title, text_size, lib.color.getColor(.black));
     try rc.save();
 }
 fn linspace(comptime N: usize, x: [*]f64, min: f64, max: f64) void {
@@ -124,7 +130,6 @@ pub fn normalize(x_start: f64) f64 {
     std.log.debug("Normalized value: {}, Exponent: -{}\n", .{ x, exponent });
     return x;
 }
-
 ```
 
 Output Plot:

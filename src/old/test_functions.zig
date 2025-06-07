@@ -13,7 +13,7 @@ pub fn cos(amplitue: ?f64, x: []f64, y: []f64) !void {
     const a: f64 = amplitue orelse 1;
     if (x.len != y.len) return MathError.MismatchedLengths;
     for (0..x.len) |i| {
-        y[i] = a * std.math.cos(x[i]);
+        y[i] = a * std.math.cos(x[i] + (std.math.pi / 2.0));
     }
 }
 pub fn tan(amplitue: ?f64, x: []f64, y: []f64) !void {
@@ -33,7 +33,7 @@ pub fn z3(x: []f64, y: []f64) !void {
 pub fn z2(x: []f64, y: []f64) !void {
     if (x.len != y.len) return MathError.MismatchedLengths;
     for (0..x.len) |i| {
-        y[i] = (x[i] * x[i]);
+        y[i] = -(x[i] * x[i]);
     }
 }
 

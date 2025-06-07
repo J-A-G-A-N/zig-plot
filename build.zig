@@ -3,8 +3,8 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-
-    var download_step = b.addSystemCommand(downloadStbImageWrite());
+    const download_cmd = downloadFiles(b.allocator) catch unreachable;
+    var download_step = b.addSystemCommand(download_cmd);
     download_step.step.name = "download_stb_if_missing";
 
     const lib_mod = b.createModule(.{
@@ -17,6 +17,7 @@ pub fn build(b: *std.Build) void {
     lib_mod.addIncludePath(.{ .cwd_relative = "/usr/include/freetype2" });
     lib_mod.addIncludePath(.{ .cwd_relative = "/usr/include/freetype2/freetype/" });
     lib_mod.linkSystemLibrary("freetype", .{});
+    lib_mod.addCSourceFile(.{ .file = b.path("deps/stb_truetype.c"), .flags = &[_][]const u8{"-O3"} });
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -33,7 +34,6 @@ pub fn build(b: *std.Build) void {
         .root_module = lib_mod,
     });
     lib.step.dependOn(&download_step.step);
-
     const no_lib = b.option(bool, "no-lib", "skip emitting library") orelse false;
     if (no_lib) {
         b.getInstallStep().dependOn(&lib.step);
@@ -50,8 +50,10 @@ pub fn build(b: *std.Build) void {
     } else b.installArtifact(exe);
 
     const no_llvm = b.option(bool, "no-llvm", "Don't use llvm") orelse false;
-    if (no_llvm) exe.use_llvm = false;
-
+    if (no_llvm) {
+        exe.use_llvm = false;
+        lib.use_llvm = false;
+    }
     const run_cmd = b.addRunArtifact(exe);
 
     run_cmd.step.dependOn(b.getInstallStep());
@@ -127,4 +129,38 @@ fn downloadStbImageWrite() []const []const u8 {
     };
     // File exists and is accessible
     return &[_][]const u8{"true"};
+}
+
+const FileDownload = struct {
+    url: []const u8,
+    path: []const u8,
+};
+
+pub fn downloadFiles(allocator: std.mem.Allocator) ![][]const u8 {
+    var commands = std.ArrayList([]const u8).init(allocator);
+
+    const files = [_]FileDownload{
+        .{ .url = "https://raw.githubusercontent.com/nothings/stb/refs/heads/master/stb_image_write.h", .path = "deps/stb_image_write.h" },
+        .{ .url = "https://raw.githubusercontent.com/nothings/stb/refs/heads/master/stb_truetype.h", .path = "deps/stb_truetype.h" },
+    };
+
+    const cwd = std.fs.cwd();
+    var any_missing = false;
+
+    for (files) |file| {
+        if (cwd.access(file.path, .{}) catch |err| err == error.FileNotFound) {
+            any_missing = true;
+            try commands.append("curl");
+            try commands.append("-sSL");
+            try commands.append(file.url);
+            try commands.append("-o");
+            try commands.append(file.path);
+        }
+    }
+
+    if (!any_missing) {
+        try commands.append("true");
+    }
+
+    return commands.toOwnedSlice();
 }
